@@ -56,7 +56,7 @@ def main():
         print('Done.')
     # 4.if the client already exist - get directory
     else:
-        os.makedirs(identifier, exist_ok=True)
+        # os.makedirs(identifier, exist_ok=True)
         with server_socket, server_socket.makefile('rb') as clientfile:
             while True:
                 raw = clientfile.readline()
