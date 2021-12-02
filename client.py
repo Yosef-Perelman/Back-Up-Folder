@@ -6,7 +6,7 @@ import time
 import string
 import random
 
-CHUNKSIZE = 1_000_000
+LIMITED_SIZE = 100000
 
 def main():
     timeout = int(sys.argv[4])
@@ -18,6 +18,7 @@ def main():
 
     # 2.get new identifier if need or send the identifier that get from the input
     server_socket.send(computerIdentifier.encode())
+    computerIdentifier = server_socket.recv(128).decode()
     newClient = 0
     if len(sys.argv) == 5:
         newClient = 1
@@ -31,6 +32,10 @@ def main():
     # 3.if new client - send directory
     if newClient == 1:
         directory = sys.argv[3]
+        head, tail = os.path.split(directory)
+        msg_len = str(len(tail)).zfill(12)
+        server_socket.send(msg_len.encode())
+        server_socket.send(tail.encode())
         for path, dirs, files in os.walk(directory):
             for file in files:
                 filename = os.path.join(path, file)
@@ -45,7 +50,7 @@ def main():
 
                     # Send the file in chunks so large files can be handled.
                     while True:
-                        data = f.read(CHUNKSIZE)
+                        data = f.read(LIMITED_SIZE)
                         if not data: break
                         server_socket.sendall(data)
         print('Done.')
@@ -68,7 +73,7 @@ def main():
                 # Read the data in chunks so it can handle large files.
                 with open(path, 'wb') as f:
                     while length:
-                        chunk = min(length, CHUNKSIZE)
+                        chunk = min(length, LIMITED_SIZE)
                         data = clientfile.read(chunk)
                         if not data: break
                         f.write(data)
@@ -81,12 +86,8 @@ def main():
                 break
     server_socket.close()
 
-    computerIdentifier = random.choice(string.ascii_letters + string.digits)
-    for i in range(127):
-        computerIdentifier = computerIdentifier + random.choice(string.ascii_letters + string.digits)
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.connect((sys.argv[1], int(sys.argv[2])))
-    server_socket.send(computerIdentifier.encode())
 
 
 if __name__ == "__main__":

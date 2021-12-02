@@ -6,7 +6,7 @@ import time
 import string
 import random
 
-CHUNKSIZE = 1_000_000
+LIMITED_SIZE = 100000
 
 def main():
 
@@ -28,21 +28,29 @@ def main():
         if computerIdentifier != '0' * 128:
             newClient = 2
         if newClient != 2:
+            computerIdentifier = ''
+            for i in range(128):
+                computerIdentifier = computerIdentifier + random.choice(string.ascii_letters + string.digits)
+            client_socket.send(computerIdentifier.encode())
             identifier = client_socket.recv(128).decode()
             if identifier == '0':
                 print('working')
                 newClient = 1
             # 2.create new identifier and send to the client
             if newClient == 1:
-                identifier = random.choice(string.ascii_letters + string.digits)
-                for i in range(127):
+                identifier = ''
+                for i in range(128):
                     identifier = identifier + random.choice(string.ascii_letters + string.digits)
             client_socket.send(identifier.encode())
             print(identifier)
 
             # 3.get the directory
             if newClient == 1:
-                os.makedirs(identifier, exist_ok=True)
+                # os.makedirs(identifier, exist_ok=True)
+                msg_len = client_socket.recv(12).decode()
+                directory_name = client_socket.recv(int(msg_len)).decode()
+                directory_path = os.path.join(identifier, directory_name)
+                # os.makedirs(os.path.dirname(path), exist_ok=True)
                 with client_socket, client_socket.makefile('rb') as clientfile:
                     while True:
                         raw = clientfile.readline()
@@ -52,13 +60,13 @@ def main():
                         length = int(clientfile.readline())
                         print(f'Downloading {filename}...\n  Expecting {length:,} bytes...', end='', flush=True)
 
-                        path = os.path.join(identifier, filename)
+                        path = os.path.join(directory_path, filename)
                         os.makedirs(os.path.dirname(path), exist_ok=True)
 
                         # Read the data in chunks so it can handle large files.
                         with open(path, 'wb') as f:
                             while length:
-                                chunk = min(length, CHUNKSIZE)
+                                chunk = min(length, LIMITED_SIZE)
                                 data = clientfile.read(chunk)
                                 if not data: break
                                 f.write(data)
@@ -85,7 +93,7 @@ def main():
 
                             # Send the file in chunks so large files can be handled.
                             while True:
-                                data = f.read(CHUNKSIZE)
+                                data = f.read(LIMITED_SIZE)
                                 if not data: break
                                 client_socket.sendall(data)
                 print('Done.')
