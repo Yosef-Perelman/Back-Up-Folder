@@ -10,6 +10,8 @@ LIMITED_SIZE = 100000
 
 def main():
 
+    updates_map = dict()
+
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         server.bind(('', int(sys.argv[1])))
@@ -41,7 +43,9 @@ def main():
                 identifier = ''
                 for i in range(128):
                     identifier = identifier + random.choice(string.ascii_letters + string.digits)
+            # add to the updates map pair of {identifier:{computer identifier:[empty list for the future changes]}}
             client_socket.send(identifier.encode())
+            updates_map[identifier] = {computerIdentifier:[]}
             print(identifier)
 
             # 3.get the directory
@@ -97,7 +101,7 @@ def main():
                                 if not data: break
                                 client_socket.sendall(data)
                 print('Done.')
-
+            print(updates_map)
             client_socket.close()
 
         else:

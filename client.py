@@ -86,8 +86,8 @@ def main():
                 break
     server_socket.close()
 
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.connect((sys.argv[1], int(sys.argv[2])))
+    # server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # server_socket.connect((sys.argv[1], int(sys.argv[2])))
 
 
 if __name__ == "__main__":
