@@ -5,18 +5,36 @@ import watchdog
 import time
 import string
 import random
+import logging
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 LIMITED_SIZE = 100000
+# global computerIdentifier
+
+
+class Handler(FileSystemEventHandler):
+    def on_deleted(self, event):
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.connect((sys.argv[1], int(sys.argv[2])))
+        server_socket.send(computerIdentifier.encode())
+        relpath = os.path.relpath(event.src_path, directory)
+        msg_len = str(len(relpath)).zfill(12)
+        server_socket.send(msg_len.encode())
+        server_socket.send(relpath.encode())
+        server_socket.close()
+
 
 def main():
     timeout = int(sys.argv[4])
-    computerIdentifier = '0' * 128
 
     # 1.connect to the server
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.connect((sys.argv[1], int(sys.argv[2])))
 
     # 2.get new identifier if need or send the identifier that get from the input
+    global computerIdentifier
+    computerIdentifier = '0' * 128
     server_socket.send(computerIdentifier.encode())
     computerIdentifier = server_socket.recv(128).decode()
     newClient = 0
@@ -31,6 +49,7 @@ def main():
 
     # 3.if new client - send directory
     if newClient == 1:
+        global directory
         directory = sys.argv[3]
         head, tail = os.path.split(directory)
         msg_len = str(len(tail)).zfill(12)
@@ -86,8 +105,20 @@ def main():
                 break
     server_socket.close()
 
-    # server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # server_socket.connect((sys.argv[1], int(sys.argv[2])))
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+    path = sys.argv[3]
+    event_handler = Handler()
+    observer = Observer()
+    observer.schedule(event_handler, sys.argv[3], recursive=True)
+    observer.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
 
 
 if __name__ == "__main__":

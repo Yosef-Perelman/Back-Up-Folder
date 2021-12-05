@@ -7,6 +7,7 @@ import string
 import random
 
 LIMITED_SIZE = 100000
+directory_name = ''
 
 def main():
 
@@ -106,6 +107,10 @@ def main():
 
         else:
             print('old known client connected!!!')
+            msg_len = client_socket.recv(12).decode()
+            relpath = client_socket.recv(int(msg_len)).decode()
+            dst_path = os.path.join(directory_path, relpath)
+            os.remove(dst_path)
             client_socket.close()
 
 if __name__ == "__main__":
