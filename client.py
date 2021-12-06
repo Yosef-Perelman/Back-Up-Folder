@@ -22,6 +22,10 @@ class Handler(FileSystemEventHandler):
         msg_len = str(len(relpath)).zfill(12)
         server_socket.send(msg_len.encode())
         server_socket.send(relpath.encode())
+        is_directory = '0'
+        if event.is_directory:
+            is_directory = '1'
+        server_socket.send(is_directory.encode())
         server_socket.close()
 
 
