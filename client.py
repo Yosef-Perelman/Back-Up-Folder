@@ -12,22 +12,46 @@ from watchdog.events import FileSystemEventHandler
 LIMITED_SIZE = 100000
 # global computerIdentifier
 
-
 class Handler(FileSystemEventHandler):
+
+    events_list = []
+
     def on_deleted(self, event):
+        self.events_list.append(event)
+
+    def on_created(self, event):
+        self.events_list.append(event)
+
+    def on_moved(self, event):
+        self.events_list.append(event)
+
+    # def on_modified(self, event):
+    #    self.events_list.append(event)
+
+    def run(self):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.connect((sys.argv[1], int(sys.argv[2])))
         server_socket.send(computerIdentifier.encode())
-        relpath = os.path.relpath(event.src_path, directory)
-        msg_len = str(len(relpath)).zfill(12)
+        msg_len = str(len(self.events_list)).zfill(12)
         server_socket.send(msg_len.encode())
-        server_socket.send(relpath.encode())
-        is_directory = '0'
-        if event.is_directory:
-            is_directory = '1'
-        server_socket.send(is_directory.encode())
-        server_socket.close()
 
+        for event in self.events_list:
+            if event.event_type == 'deleted':
+                event_type = 'deleted'
+                msg_len = str(len(event_type)).zfill(12)
+                server_socket.send(msg_len.encode())
+                server_socket.send(event_type.encode())
+                relpath = os.path.relpath(event.src_path, directory)
+                msg_len = str(len(relpath)).zfill(12)
+                server_socket.send(msg_len.encode())
+                server_socket.send(relpath.encode())
+                is_directory = '0'
+                if event.is_directory:
+                    is_directory = '1'
+                server_socket.send(is_directory.encode())
+                self.events_list.remove(event)
+
+        server_socket.close()
 
 def main():
     timeout = int(sys.argv[4])
@@ -120,6 +144,7 @@ def main():
     try:
         while True:
             time.sleep(1)
+            event_handler.run()
     except KeyboardInterrupt:
         observer.stop()
     observer.join()

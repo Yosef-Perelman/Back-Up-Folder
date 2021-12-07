@@ -20,7 +20,7 @@ def main():
         print("invalid input")
         sys.exit()
 
-    server.listen()
+    server.listen(15)
     while True:
         # 1.Connect to the client
         client_socket, client_address = server.accept()
@@ -102,24 +102,33 @@ def main():
                                 if not data: break
                                 client_socket.sendall(data)
                 print('Done.')
-            print(updates_map)
+            # print(updates_map)
             client_socket.close()
 
         else:
             print('old known client connected!!!')
-            msg_len = client_socket.recv(12).decode()
-            relpath = client_socket.recv(int(msg_len)).decode()
-            dst_path = os.path.join(directory_path, relpath)
-            is_directory = client_socket.recv(1).decode()
-            if is_directory == '1':
-                for root, dirs, files in os.walk(dst_path, topdown=False):
-                    for name in files:
-                        os.remove(os.path.join(root, name))
-                    for name in dirs:
-                        os.rmdir(os.path.join(root, name))
-                os.rmdir(dst_path)
-            else:
-                os.remove(dst_path)
+            events_list_length = client_socket.recv(12).decode()  # recive length of events list
+            if events_list_length == '000000000000':
+                events_list_length = '0'
+            for i in range(int(events_list_length)):
+                msg_len = client_socket.recv(12).decode() # recive event_type length
+                if msg_len == '000000000000':
+                    msg_len = '0'
+                event_type = client_socket.recv(int(msg_len)).decode() # recive event_type
+                if event_type == 'deleted':
+                    msg_len = client_socket.recv(12).decode() # recive relpath length
+                    relpath = client_socket.recv(int(msg_len)).decode() # recive relpath
+                    dst_path = os.path.join(directory_path, relpath)
+                    is_directory = client_socket.recv(1).decode() # recive is_directory
+                    if is_directory == '1':
+                        for root, dirs, files in os.walk(dst_path, topdown=False):
+                            for name in files:
+                                os.remove(os.path.join(root, name))
+                            for name in dirs:
+                                os.rmdir(os.path.join(root, name))
+                        os.rmdir(dst_path)
+                    else:
+                        os.remove(dst_path)
             client_socket.close()
 
 if __name__ == "__main__":
