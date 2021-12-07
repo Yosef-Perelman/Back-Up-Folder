@@ -9,7 +9,7 @@ import logging
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-LIMITED_SIZE = 100000
+LIMITED_SIZE = 1024
 # global computerIdentifier
 
 
@@ -52,6 +52,31 @@ class Handler(FileSystemEventHandler):
                 server_socket.send(is_directory.encode())
                 self.events_list.remove(event)
 
+            elif event.event_type == 'created':
+                event_type = 'created'
+                msg_len = str(len(event_type)).zfill(12)
+                server_socket.send(msg_len.encode())    # send event_type length
+                server_socket.send(event_type.encode()) # send event type
+                relpath = os.path.relpath(event.src_path, directory_path)
+                msg_len = str(len(relpath)).zfill(12)
+                server_socket.send(msg_len.encode())
+                server_socket.send(relpath.encode())
+                is_directory = '0'
+                if event.is_directory:
+                    is_directory = '1'
+                server_socket.send(is_directory.encode())  # send is_directory
+                if is_directory == '0':
+                    filesize = os.path.getsize(event.src_path)
+                    msg_len = str(filesize).zfill(12)
+                    server_socket.send(msg_len.encode())
+                    with open(event.src_path, 'rb') as f:
+                        while True:
+                            data = f.read(LIMITED_SIZE)
+                            if not data: break
+                            server_socket.sendall(data)
+                self.events_list.remove(event)
+
+
         server_socket.close()
 
 
@@ -87,22 +112,28 @@ def main():
         server_socket.send(msg_len.encode())
         server_socket.send(tail.encode())
         for path, dirs, files in os.walk(directory):
+            for dir in dirs:
+                direname = os.path.join(path, dir)
+                relpath = os.path.relpath(direname, directory)
+                msg_len = str(len(relpath)).zfill(12)
+                server_socket.send(msg_len.encode())
+                server_socket.send(relpath.encode())
+            server_socket.send("finish_dires".encode())
             for file in files:
                 filename = os.path.join(path, file)
                 relpath = os.path.relpath(filename, directory)
-                filesize = os.path.getsize(filename)
-
-                print(f'Sending {relpath}')
-
+                msg_len = str(len(relpath)).zfill(12)
+                server_socket.send(msg_len.encode())
+                server_socket.send(relpath.encode())
+                filesize = os.path.getsize(filename)               
+                msg_len = str(filesize).zfill(12)
+                server_socket.send(msg_len.encode())
                 with open(filename, 'rb') as f:
-                    server_socket.sendall(relpath.encode() + b'\n')
-                    server_socket.sendall(str(filesize).encode() + b'\n')
-
-                    # Send the file in chunks so large files can be handled.
                     while True:
                         data = f.read(LIMITED_SIZE)
                         if not data: break
                         server_socket.sendall(data)
+            server_socket.send("finish_files".encode())
         print('Done.')
         directory_path = sys.argv[3]
     # 4.if the client already exist - get directory
