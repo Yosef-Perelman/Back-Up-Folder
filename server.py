@@ -7,11 +7,11 @@ import string
 import random
 
 LIMITED_SIZE = 100000
-directory_name = ''
 
 def main():
 
     updates_map = dict()
+    folder_names_map = dict()
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -54,6 +54,7 @@ def main():
                 # os.makedirs(identifier, exist_ok=True)
                 msg_len = client_socket.recv(12).decode()
                 directory_name = client_socket.recv(int(msg_len)).decode()
+                folder_names_map[identifier] = directory_name
                 directory_path = os.path.join(identifier, directory_name)
                 # os.makedirs(os.path.dirname(path), exist_ok=True)
                 with client_socket, client_socket.makefile('rb') as clientfile:
@@ -84,6 +85,9 @@ def main():
                         break
             else:
                 directory = identifier
+                msg_len = str(len(folder_names_map[identifier])).zfill(12)
+                client_socket.send(msg_len.encode())
+                client_socket.send(folder_names_map[identifier].encode())
                 for path, dirs, files in os.walk(directory):
                     for file in files:
                         filename = os.path.join(path, file)

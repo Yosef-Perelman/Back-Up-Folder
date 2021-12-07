@@ -12,6 +12,7 @@ from watchdog.events import FileSystemEventHandler
 LIMITED_SIZE = 100000
 # global computerIdentifier
 
+
 class Handler(FileSystemEventHandler):
 
     events_list = []
@@ -41,7 +42,7 @@ class Handler(FileSystemEventHandler):
                 msg_len = str(len(event_type)).zfill(12)
                 server_socket.send(msg_len.encode())
                 server_socket.send(event_type.encode())
-                relpath = os.path.relpath(event.src_path, directory)
+                relpath = os.path.relpath(event.src_path, directory_path)
                 msg_len = str(len(relpath)).zfill(12)
                 server_socket.send(msg_len.encode())
                 server_socket.send(relpath.encode())
@@ -53,7 +54,9 @@ class Handler(FileSystemEventHandler):
 
         server_socket.close()
 
+
 def main():
+    global directory_path
     timeout = int(sys.argv[4])
 
     # 1.connect to the server
@@ -65,9 +68,9 @@ def main():
     computerIdentifier = '0' * 128
     server_socket.send(computerIdentifier.encode())
     computerIdentifier = server_socket.recv(128).decode()
-    newClient = 0
+    newclient = 0
     if len(sys.argv) == 5:
-        newClient = 1
+        newclient = 1
     identifier = '0'
     if len(sys.argv) == 6:
         identifier = sys.argv[5]
@@ -76,8 +79,8 @@ def main():
     print('identifier is: ', identifier)
 
     # 3.if new client - send directory
-    if newClient == 1:
-        global directory
+    if newclient == 1:
+        # global directory
         directory = sys.argv[3]
         head, tail = os.path.split(directory)
         msg_len = str(len(tail)).zfill(12)
@@ -101,8 +104,13 @@ def main():
                         if not data: break
                         server_socket.sendall(data)
         print('Done.')
+        directory_path = sys.argv[3]
     # 4.if the client already exist - get directory
     else:
+        msg_len = server_socket.recv(12).decode()
+        directory_name = server_socket.recv(int(msg_len)).decode()
+        cwd = os.getcwd()
+        directory_path = os.path.join(cwd, directory_name)
         # os.makedirs(identifier, exist_ok=True)
         with server_socket, server_socket.makefile('rb') as clientfile:
             while True:
@@ -113,7 +121,6 @@ def main():
                 length = int(clientfile.readline())
                 print(f'Downloading {filename}...\n  Expecting {length:,} bytes...', end='', flush=True)
 
-                cwd = os.getcwd()
                 path = os.path.join(cwd, filename)
                 os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -136,14 +143,13 @@ def main():
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
-    path = sys.argv[3]
     event_handler = Handler()
     observer = Observer()
-    observer.schedule(event_handler, sys.argv[3], recursive=True)
+    observer.schedule(event_handler, directory_path, recursive=True)
     observer.start()
     try:
         while True:
-            time.sleep(1)
+            time.sleep(timeout)
             event_handler.run()
     except KeyboardInterrupt:
         observer.stop()
