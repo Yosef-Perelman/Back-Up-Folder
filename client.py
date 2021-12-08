@@ -5,12 +5,10 @@ import watchdog
 import time
 import string
 import random
-import logging
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 LIMITED_SIZE = 1024
-# global computerIdentifier
 
 
 class Handler(FileSystemEventHandler):

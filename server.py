@@ -46,12 +46,11 @@ def main():
                     identifier = identifier + random.choice(string.ascii_letters + string.digits)
             # add to the updates map pair of {identifier:{computer identifier:[empty list for the future changes]}}
             client_socket.send(identifier.encode())
-            # todo
-            updates_map[identifier] = {computerIdentifier:[]}
             print(identifier)
 
             # if new client - get dir
             if newClient == 1:
+                updates_map[identifier] = [{computerIdentifier: []}]
                 msg_len = client_socket.recv(12).decode()
                 directory_name = client_socket.recv(int(msg_len)).decode()
                 folder_names_map[identifier] = directory_name
@@ -87,6 +86,7 @@ def main():
                         break
             # if old client with new device - transfer dir
             else:
+                updates_map[identifier].append({computerIdentifier: []})
                 directory = identifier
                 msg_len = str(len(folder_names_map[identifier])).zfill(12)
                 client_socket.send(msg_len.encode())
@@ -147,6 +147,9 @@ def main():
                         os.rmdir(dst_path)
                     else:
                         os.remove(dst_path)
+                    for device in updates_map[identifier]:
+                        if computerIdentifier != device:
+                            device[computerIdentifier].append([is_directory, event_type, dst_path])
 
                 # case of created event
                 if event_type == 'created':
@@ -172,11 +175,11 @@ def main():
                                 # socket was closed early.
                         print('Incomplete')
                         break
-
-
-
-
+                    for device in updates_map[identifier]:
+                        if computerIdentifier != device:
+                            device[computerIdentifier].append([is_directory, event_type, dst_path])
             client_socket.close()
+
 
 if __name__ == "__main__":
     main()
