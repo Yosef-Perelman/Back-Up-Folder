@@ -6,7 +6,7 @@ import time
 import string
 import random
 
-LIMITED_SIZE = 1024
+LIMITED_SIZE = 30000
 
 def main():
 
@@ -44,13 +44,16 @@ def main():
                 identifier = ''
                 for i in range(128):
                     identifier = identifier + random.choice(string.ascii_letters + string.digits)
+                updates_map.update({identifier: dict()})
             # add to the updates map pair of {identifier:{computer identifier:[empty list for the future changes]}}
             client_socket.send(identifier.encode())
+            # add the device of the client to the right place in the updates map
+            updates_map[identifier].update({computerIdentifier: []})
+            print("updates map: ", updates_map)
             print(identifier)
 
             # if new client - get dir
             if newClient == 1:
-                updates_map[identifier] = [{computerIdentifier: []}]
                 msg_len = client_socket.recv(12).decode()
                 directory_name = client_socket.recv(int(msg_len)).decode()
                 folder_names_map[identifier] = directory_name
@@ -86,7 +89,6 @@ def main():
                         break
             # if old client with new device - transfer dir
             else:
-                updates_map[identifier].append({computerIdentifier: []})
                 directory = identifier
                 msg_len = str(len(folder_names_map[identifier])).zfill(12)
                 client_socket.send(msg_len.encode())
@@ -149,18 +151,18 @@ def main():
                         os.remove(dst_path)
                     for device in updates_map[identifier]:
                         if computerIdentifier != device:
-                            device[computerIdentifier].append([is_directory, event_type, dst_path])
+                            updates_map[identifier][device].append([is_directory, event_type, relpath])
 
                 # case of created event
                 if event_type == 'created':
-                    msg_len = client_socket.recv(12).decode() # recive relpath length
-                    relpath = client_socket.recv(int(msg_len)).decode() # recive relpath
+                    msg_len = client_socket.recv(12).decode()  # receive relpath length
+                    relpath = client_socket.recv(int(msg_len)).decode() # receive relpath
                     dst_path = os.path.join(directory_path, relpath)
-                    is_directory = client_socket.recv(1).decode() # recive is_directory
+                    is_directory = client_socket.recv(1).decode()  # receive is_directory
                     if is_directory == '1':
                         os.makedirs(dst_path)
                     else:
-                        length = int(client_socket.recv(12).decode())  # recive file length
+                        length = int(client_socket.recv(12).decode())  # receive file length
                         # Read the data in chunks so it can handle large files.
                         with open(dst_path, 'w') as f:
                             while length:
@@ -177,7 +179,25 @@ def main():
                         break
                     for device in updates_map[identifier]:
                         if computerIdentifier != device:
-                            device[computerIdentifier].append([is_directory, event_type, dst_path])
+                            updates_map[identifier][device].append([is_directory, event_type, relpath])
+
+            for event in updates_map[identifier][computerIdentifier]:
+                if event[1] == 'deleted':
+                    event_type = 'deleted'
+                    msg_len = str(len(event_type)).zfill(12)
+                    client_socket.send(msg_len.encode())
+                    client_socket.send(event[1].encode())
+                    relpath = event[2]
+                    msg_len = str(len(relpath)).zfill(12)
+                    client_socket.send(msg_len.encode())
+                    client_socket.send(relpath.encode())
+                    is_directory = '0'
+                    if event[0] == '1':
+                        is_directory = '1'
+                    client_socket.send(is_directory.encode())
+                    updates_map[identifier][computerIdentifier].remove(event)
+
+            client_socket.send('finish_all!!'.encode())
             client_socket.close()
 
 

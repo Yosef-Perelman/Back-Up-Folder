@@ -8,21 +8,25 @@ import random
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-LIMITED_SIZE = 1024
+LIMITED_SIZE = 30000
 
 
 class Handler(FileSystemEventHandler):
 
+    flag = 0
     events_list = []
 
     def on_deleted(self, event):
-        self.events_list.append(event)
+        if self.flag == 0:
+            self.events_list.append(event)
 
     def on_created(self, event):
-        self.events_list.append(event)
+        if self.flag == 0:
+            self.events_list.append(event)
 
     def on_moved(self, event):
-        self.events_list.append(event)
+        if self.flag == 0:
+            self.events_list.append(event)
 
     # def on_modified(self, event):
     #    self.events_list.append(event)
@@ -74,7 +78,33 @@ class Handler(FileSystemEventHandler):
                             server_socket.sendall(data)
                 self.events_list.remove(event)
 
+        self.flag = 1
+        msg_len = server_socket.recv(12).decode()  # recive event_type length
+        while True:
+            if msg_len == 'finish_all!!':
+                break
+            if msg_len == '000000000000':
+                msg_len = '0'
+            event_type = server_socket.recv(int(msg_len)).decode()  # recive event_type
 
+            # case of deleted event
+            if event_type == 'deleted':
+                msg_len = server_socket.recv(12).decode()  # recive relpath length
+                relpath = server_socket.recv(int(msg_len)).decode()  # recive relpath
+                dst_path = os.path.join(directory_path, relpath)
+                is_directory = server_socket.recv(1).decode()  # recive is_directory
+                if is_directory == '1':
+                    for root, dirs, files in os.walk(dst_path, topdown=False):
+                        for name in files:
+                            os.remove(os.path.join(root, name))
+                        for name in dirs:
+                            os.rmdir(os.path.join(root, name))
+                    os.rmdir(dst_path)
+                else:
+                    os.remove(dst_path)
+            msg_len = server_socket.recv(12).decode()
+        # time.sleep(1)
+        self.flag = 0
         server_socket.close()
 
 
@@ -91,6 +121,7 @@ def main():
     computerIdentifier = '0' * 128
     server_socket.send(computerIdentifier.encode())
     computerIdentifier = server_socket.recv(128).decode()
+    print("computeridentifier = ", computerIdentifier, "\n")
     newclient = 0
     if len(sys.argv) == 5:
         newclient = 1
@@ -119,7 +150,11 @@ def main():
                 server_socket.send(relpath.encode())
             server_socket.send("finish_dires".encode())
             #send all files
+            counter = 0
             for file in files:
+                # if counter == 10:
+                # time.sleep(timeout)
+                    # counter = 0
                 filename = os.path.join(path, file)
                 relpath = os.path.relpath(filename, directory)
                 msg_len = str(len(relpath)).zfill(12)
@@ -133,6 +168,9 @@ def main():
                         data = f.read(LIMITED_SIZE)
                         if not data: break
                         server_socket.sendall(data)
+                counter += 1
+                #if filesize >= 30000:
+                #    time.sleep(1)
             server_socket.send("finish_files".encode())
         print('Done.')
         directory_path = sys.argv[3]
@@ -177,12 +215,13 @@ def main():
 
 
     event_handler = Handler()
+    global observer
     observer = Observer()
     observer.schedule(event_handler, directory_path, recursive=True)
     observer.start()
     try:
         while True:
-            time.sleep(timeout)
+            time.sleep(3)
             event_handler.run()
     except KeyboardInterrupt:
         observer.stop()
