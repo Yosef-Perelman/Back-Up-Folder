@@ -58,33 +58,36 @@ def main():
                 folder_names_map[identifier] = directory_name
                 directory_path = os.path.join(identifier, directory_name)
                 # os.makedirs(os.path.dirname(path), exist_ok=True)
-                msg_len = client_socket.recv(12).decode()
-                while msg_len != 'finish_dires':
-                    dirrelpath = client_socket.recv(int(msg_len)).decode()
-                    dirname = os.path.join(directory_path, dirrelpath)
-                    os.makedirs(dirname)
-                    msg_len = client_socket.recv(12).decode()
                 while True:
-                    msg_len = client_socket.recv(12).decode() # recive relpath length
-                    if msg_len == 'finish_files':
+                    msg_len = client_socket.recv(12).decode()
+                    if msg_len == 'finish_all!!':
                         break
-                    relpath = client_socket.recv(int(msg_len)).decode() # recive relpath
-                    dst_path = os.path.join(directory_path, relpath)
-                    length = int(client_socket.recv(12).decode())  # recive file length
-                    # Read the data in chunks so it can handle large files.
-                    with open(dst_path, 'w') as f:
-                        while length:
-                            msg_len = min(length, LIMITED_SIZE)
-                            data = client_socket.recv(msg_len).decode()
-                            if not data: break
-                            f.write(data)
-                            length -= len(data)
-                        else:  # only runs if while doesn't break and length==0
-                            print('Complete')
-                            continue
-                            # socket was closed early.
-                    print('Incomplete')
-                    break
+                    while msg_len != 'finish_dires':
+                        dirrelpath = client_socket.recv(int(msg_len)).decode()
+                        dirname = os.path.join(directory_path, dirrelpath)
+                        os.makedirs(dirname)
+                        msg_len = client_socket.recv(12).decode()
+                    while True:
+                        msg_len = client_socket.recv(12).decode() # recive relpath length
+                        if msg_len == 'finish_files':
+                            break
+                        relpath = client_socket.recv(int(msg_len)).decode() # recive relpath
+                        dst_path = os.path.join(directory_path, relpath)
+                        length = int(client_socket.recv(12).decode())  # recive file length
+                        # Read the data in chunks so it can handle large files.
+                        with open(dst_path, 'wb') as f:
+                            while length:
+                                msg_len = min(length, LIMITED_SIZE)
+                                data = client_socket.recv(msg_len)
+                                if not data: break
+                                f.write(data)
+                                length -= len(data)
+                            else:  # only runs if while doesn't break and length==0
+                                print('Complete')
+                                continue
+                                # socket was closed early.
+                        print('Incomplete')
+                        break
             else:
                 directory = identifier
                 msg_len = str(len(folder_names_map[identifier])).zfill(12)

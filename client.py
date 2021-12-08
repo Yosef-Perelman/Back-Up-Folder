@@ -111,7 +111,7 @@ def main():
         msg_len = str(len(tail)).zfill(12)
         server_socket.send(msg_len.encode())
         server_socket.send(tail.encode())
-        for path, dirs, files in os.walk(directory):
+        for path, dirs, files in os.walk(directory, topdown=True):
             for dir in dirs:
                 direname = os.path.join(path, dir)
                 relpath = os.path.relpath(direname, directory)
@@ -136,6 +136,7 @@ def main():
             server_socket.send("finish_files".encode())
         print('Done.')
         directory_path = sys.argv[3]
+        server_socket.send("finish_all!!".encode())
     # 4.if the client already exist - get directory
     else:
         msg_len = server_socket.recv(12).decode()
