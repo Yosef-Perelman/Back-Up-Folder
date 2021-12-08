@@ -84,11 +84,11 @@ def main():
     global directory_path
     timeout = int(sys.argv[4])
 
-    # 1.connect to the server
+    # connect to the server
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.connect((sys.argv[1], int(sys.argv[2])))
 
-    # 2.get new identifier if need or send the identifier that get from the input
+    # set identifier and computeridentifier
     global computerIdentifier
     computerIdentifier = '0' * 128
     server_socket.send(computerIdentifier.encode())
@@ -103,15 +103,16 @@ def main():
     identifier = server_socket.recv(128).decode()
     print('identifier is: ', identifier)
 
-    # 3.if new client - send directory
+    # if new client - transfer dir
     if newclient == 1:
-        # global directory
         directory = sys.argv[3]
+        # split the directory name and send it
         head, tail = os.path.split(directory)
         msg_len = str(len(tail)).zfill(12)
         server_socket.send(msg_len.encode())
         server_socket.send(tail.encode())
         for path, dirs, files in os.walk(directory, topdown=True):
+            # send all dirs
             for dir in dirs:
                 direname = os.path.join(path, dir)
                 relpath = os.path.relpath(direname, directory)
@@ -119,6 +120,7 @@ def main():
                 server_socket.send(msg_len.encode())
                 server_socket.send(relpath.encode())
             server_socket.send("finish_dires".encode())
+            #send all files
             for file in files:
                 filename = os.path.join(path, file)
                 relpath = os.path.relpath(filename, directory)
@@ -137,30 +139,33 @@ def main():
         print('Done.')
         directory_path = sys.argv[3]
         server_socket.send("finish_all!!".encode())
-    # 4.if the client already exist - get directory
+    # if known client from new device - get dir
     else:
         msg_len = server_socket.recv(12).decode()
         directory_name = server_socket.recv(int(msg_len)).decode()
         cwd = os.getcwd()
         directory_path = os.path.join(cwd, directory_name)
-        # os.makedirs(identifier, exist_ok=True)
-        with server_socket, server_socket.makefile('rb') as clientfile:
+        while True:
+            msg_len = server_socket.recv(12).decode()
+            if msg_len == 'finish_all!!':
+                break
+            while msg_len != 'finish_dires':
+                dirrelpath = server_socket.recv(int(msg_len)).decode()
+                dirname = os.path.join(cwd, dirrelpath)
+                os.makedirs(dirname)
+                msg_len = server_socket.recv(12).decode()
             while True:
-                raw = clientfile.readline()
-                if not raw: break  # no more files, server closed connection.
-
-                filename = raw.strip().decode()
-                length = int(clientfile.readline())
-                print(f'Downloading {filename}...\n  Expecting {length:,} bytes...', end='', flush=True)
-
-                path = os.path.join(cwd, filename)
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-
+                msg_len = server_socket.recv(12).decode()  # recive relpath length
+                if msg_len == 'finish_files':
+                    break
+                relpath = server_socket.recv(int(msg_len)).decode()  # recive relpath
+                dst_path = os.path.join(cwd, relpath)
+                length = int(server_socket.recv(12).decode())  # recive file length
                 # Read the data in chunks so it can handle large files.
-                with open(path, 'wb') as f:
+                with open(dst_path, 'wb') as f:
                     while length:
-                        chunk = min(length, LIMITED_SIZE)
-                        data = clientfile.read(chunk)
+                        msg_len = min(length, LIMITED_SIZE)
+                        data = server_socket.recv(msg_len)
                         if not data: break
                         f.write(data)
                         length -= len(data)
@@ -172,9 +177,7 @@ def main():
                 break
     server_socket.close()
 
-    logging.basicConfig(level=logging.INFO,
-                        format='%(asctime)s - %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S')
+
     event_handler = Handler()
     observer = Observer()
     observer.schedule(event_handler, directory_path, recursive=True)
