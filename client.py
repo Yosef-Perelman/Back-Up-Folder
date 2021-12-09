@@ -131,29 +131,6 @@ class Handler(FileSystemEventHandler):
                 is_directory = server_socket.recv(1).decode()  # receive is_directory
                 if is_directory == '1':
                     os.makedirs(dst_path)
-                    while True:
-                        msg_len = server_socket.recv(12).decode()
-                        if msg_len == 'finish_all!!':
-                            break
-                        while msg_len != 'finish_dires':
-                            dirrelpath = server_socket.recv(int(msg_len)).decode()
-                            dirname = os.path.join(dst_path, dirrelpath)
-                            os.makedirs(dirname)
-                            msg_len = server_socket.recv(12).decode()
-                        while True:
-                            msg_len = server_socket.recv(12).decode()  # recive relpath length
-                            if msg_len == 'finish_files':
-                                break
-                            relpath = server_socket.recv(int(msg_len)).decode()  # recive relpath
-                            new_path = os.path.join(dst_path, relpath)
-                            length = int(server_socket.recv(12).decode())  # recive file length
-                            with open(new_path, 'wb') as f:
-                                while length:
-                                    msg_len = min(length, LIMITED_SIZE)
-                                    data = server_socket.recv(msg_len)
-                                    if not data: break
-                                    f.write(data)
-                                    length -= len(data)
                 else:
                     length = int(server_socket.recv(12).decode())  # receive file length
                     # Read the data in chunks so it can handle large files.
