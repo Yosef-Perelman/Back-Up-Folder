@@ -52,7 +52,6 @@ class Handler(FileSystemEventHandler):
                 if event.is_directory:
                     is_directory = '1'
                 server_socket.send(is_directory.encode())
-                self.events_list.remove(event)
 
             elif event.event_type == 'created':
                 event_type = 'created'
@@ -67,6 +66,33 @@ class Handler(FileSystemEventHandler):
                 if event.is_directory:
                     is_directory = '1'
                 server_socket.send(is_directory.encode())  # send is_directory
+                """if is_directory == '1':
+                    for path, dirs, files in os.walk(event.src_path, topdown=True):
+                        # send all dirs
+                        for dir in dirs:
+                            direname = os.path.join(path, dir)
+                            relpath = os.path.relpath(direname, event.src_path)
+                            msg_len = str(len(relpath)).zfill(12)
+                            server_socket.send(msg_len.encode())
+                            server_socket.send(relpath.encode())
+                        server_socket.send("finish_dires".encode())
+                        # send all files
+                        for file in files:
+                            filename = os.path.join(path, file)
+                            relpath = os.path.relpath(filename, event.src_path)
+                            msg_len = str(len(relpath)).zfill(12)
+                            server_socket.send(msg_len.encode())
+                            server_socket.send(relpath.encode())
+                            filesize = os.path.getsize(filename)
+                            msg_len = str(filesize).zfill(12)
+                            server_socket.send(msg_len.encode())
+                            with open(filename, 'rb') as f:
+                                while True:
+                                    data = f.read(LIMITED_SIZE)
+                                    if not data: break
+                                    server_socket.sendall(data)
+                        server_socket.send("finish_files".encode())
+                    server_socket.send("finish_all!!".encode())"""
                 if is_directory == '0':
                     filesize = os.path.getsize(event.src_path)
                     msg_len = str(filesize).zfill(12)
@@ -76,7 +102,6 @@ class Handler(FileSystemEventHandler):
                             data = f.read(LIMITED_SIZE)
                             if not data: break
                             server_socket.sendall(data)
-                self.events_list.remove(event)
 
             elif event.event_type == 'moved':
                 event_type = 'moved'
@@ -91,7 +116,7 @@ class Handler(FileSystemEventHandler):
                 msg_len = str(len(dst_relpath)).zfill(12)
                 server_socket.send(msg_len.encode())
                 server_socket.send(dst_relpath.encode())
-                self.events_list.remove(event)
+        self.events_list.clear()
 
         self.flag = 1
         msg_len = server_socket.recv(12).decode()  # recive event_type length
@@ -125,6 +150,29 @@ class Handler(FileSystemEventHandler):
                 is_directory = server_socket.recv(1).decode()  # receive is_directory
                 if is_directory == '1':
                     os.makedirs(dst_path)
+                    while True:
+                        msg_len = server_socket.recv(12).decode()
+                        if msg_len == 'finish_all!!':
+                            break
+                        while msg_len != 'finish_dires':
+                            dirrelpath = server_socket.recv(int(msg_len)).decode()
+                            dirname = os.path.join(dst_path, dirrelpath)
+                            os.makedirs(dirname)
+                            msg_len = server_socket.recv(12).decode()
+                        while True:
+                            msg_len = server_socket.recv(12).decode()  # recive relpath length
+                            if msg_len == 'finish_files':
+                                break
+                            relpath = server_socket.recv(int(msg_len)).decode()  # recive relpath
+                            new_path = os.path.join(dst_path, relpath)
+                            length = int(server_socket.recv(12).decode())  # recive file length
+                            with open(new_path, 'wb') as f:
+                                while length:
+                                    msg_len = min(length, LIMITED_SIZE)
+                                    data = server_socket.recv(msg_len)
+                                    if not data: break
+                                    f.write(data)
+                                    length -= len(data)
                 else:
                     length = int(server_socket.recv(12).decode())  # receive file length
                     # Read the data in chunks so it can handle large files.
@@ -220,15 +268,15 @@ def main():
     else:
         msg_len = server_socket.recv(12).decode()
         directory_name = server_socket.recv(int(msg_len)).decode()
-        cwd = os.getcwd()
-        directory_path = os.path.join(cwd, directory_name)
+        #cwd = os.getcwd()
+        directory_path = os.path.join(sys.argv[3], directory_name)
         while True:
             msg_len = server_socket.recv(12).decode()
             if msg_len == 'finish_all!!':
                 break
             while msg_len != 'finish_dires':
                 dirrelpath = server_socket.recv(int(msg_len)).decode()
-                dirname = os.path.join(cwd, dirrelpath)
+                dirname = os.path.join(sys.argv[3], dirrelpath)
                 os.makedirs(dirname)
                 msg_len = server_socket.recv(12).decode()
             while True:
@@ -236,7 +284,7 @@ def main():
                 if msg_len == 'finish_files':
                     break
                 relpath = server_socket.recv(int(msg_len)).decode()  # recive relpath
-                dst_path = os.path.join(cwd, relpath)
+                dst_path = os.path.join(sys.argv[3], relpath)
                 length = int(server_socket.recv(12).decode())  # recive file length
                 # Read the data in chunks so it can handle large files.
                 with open(dst_path, 'wb') as f:
@@ -262,7 +310,7 @@ def main():
     observer.start()
     try:
         while True:
-            time.sleep(3)
+            time.sleep(timeout)
             event_handler.run()
     except KeyboardInterrupt:
         observer.stop()
