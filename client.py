@@ -102,6 +102,24 @@ class Handler(FileSystemEventHandler):
                     os.rmdir(dst_path)
                 else:
                     os.remove(dst_path)
+            # case of created event
+            if event_type == 'created':
+                msg_len = server_socket.recv(12).decode()  # receive relpath length
+                relpath = server_socket.recv(int(msg_len)).decode()  # receive relpath
+                dst_path = os.path.join(directory_path, relpath)
+                is_directory = server_socket.recv(1).decode()  # receive is_directory
+                if is_directory == '1':
+                    os.makedirs(dst_path)
+                else:
+                    length = int(server_socket.recv(12).decode())  # receive file length
+                    # Read the data in chunks so it can handle large files.
+                    with open(dst_path, 'w') as f:
+                        while length:
+                            msg_len = min(length, LIMITED_SIZE)
+                            data = server_socket.recv(msg_len).decode()
+                            if not data: break
+                            f.write(data)
+                            length -= len(data)
             msg_len = server_socket.recv(12).decode()
         # time.sleep(1)
         self.flag = 0
