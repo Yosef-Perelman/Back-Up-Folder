@@ -78,6 +78,21 @@ class Handler(FileSystemEventHandler):
                             server_socket.sendall(data)
                 self.events_list.remove(event)
 
+            elif event.event_type == 'moved':
+                event_type = 'moved'
+                msg_len = str(len(event_type)).zfill(12)
+                server_socket.send(msg_len.encode())  # send event_type length
+                server_socket.send(event_type.encode())  # send event type
+                src_relpath = os.path.relpath(event.src_path, directory_path)
+                msg_len = str(len(src_relpath)).zfill(12)
+                server_socket.send(msg_len.encode())
+                server_socket.send(src_relpath.encode())
+                dst_relpath = os.path.relpath(event.dest_path, directory_path)
+                msg_len = str(len(dst_relpath)).zfill(12)
+                server_socket.send(msg_len.encode())
+                server_socket.send(dst_relpath.encode())
+                self.events_list.remove(event)
+
         self.flag = 1
         msg_len = server_socket.recv(12).decode()  # recive event_type length
         while True:
@@ -103,7 +118,7 @@ class Handler(FileSystemEventHandler):
                 else:
                     os.remove(dst_path)
             # case of created event
-            if event_type == 'created':
+            elif event_type == 'created':
                 msg_len = server_socket.recv(12).decode()  # receive relpath length
                 relpath = server_socket.recv(int(msg_len)).decode()  # receive relpath
                 dst_path = os.path.join(directory_path, relpath)
@@ -120,6 +135,14 @@ class Handler(FileSystemEventHandler):
                             if not data: break
                             f.write(data)
                             length -= len(data)
+            elif event_type == 'moved':
+                msg_len = server_socket.recv(12).decode()  # receive relpath length
+                src_relpath = server_socket.recv(int(msg_len)).decode()  # receive relpath
+                src_path = os.path.join(directory_path, src_relpath)
+                msg_len = server_socket.recv(12).decode()  # receive relpath length
+                dst_relpath = server_socket.recv(int(msg_len)).decode()  # receive relpath
+                dst_path = os.path.join(directory_path, dst_relpath)
+                os.rename(src_path, dst_path)
             msg_len = server_socket.recv(12).decode()
         # time.sleep(1)
         self.flag = 0

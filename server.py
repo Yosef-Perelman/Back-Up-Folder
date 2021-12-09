@@ -154,7 +154,7 @@ def main():
                             updates_map[identifier][device].append([is_directory, event_type, relpath])
 
                 # case of created event
-                if event_type == 'created':
+                elif event_type == 'created':
                     msg_len = client_socket.recv(12).decode()  # receive relpath length
                     relpath = client_socket.recv(int(msg_len)).decode() # receive relpath
                     dst_path = os.path.join(directory_path, relpath)
@@ -181,8 +181,20 @@ def main():
                         print('Incomplete')
                         break"""
 
-            for event in updates_map[identifier][computerIdentifier]:
+                elif event_type == 'moved':
+                    msg_len = client_socket.recv(12).decode()  # receive relpath length
+                    src_relpath = client_socket.recv(int(msg_len)).decode()  # receive relpath
+                    src_path = os.path.join(directory_path, src_relpath)
+                    msg_len = client_socket.recv(12).decode()  # receive relpath length
+                    dst_relpath = client_socket.recv(int(msg_len)).decode()  # receive relpath
+                    dst_path = os.path.join(directory_path, dst_relpath)
+                    os.rename(src_path, dst_path)
+                    for device in updates_map[identifier]:
+                        if computerIdentifier != device:
+                            # notice: in 'moved' event the order of the parameters is different!
+                            updates_map[identifier][device].append([event_type, src_relpath, dst_relpath])
 
+            for event in updates_map[identifier][computerIdentifier]:
                 if event[1] == 'deleted':
                     event_type = 'deleted'
                     msg_len = str(len(event_type)).zfill(12)
@@ -221,6 +233,21 @@ def main():
                                 data = f.read(LIMITED_SIZE)
                                 if not data: break
                                 client_socket.sendall(data)
+                    updates_map[identifier][computerIdentifier].remove(event)
+
+                elif event[0] == 'moved':
+                    event_type = 'moved'
+                    msg_len = str(len(event_type)).zfill(12)
+                    client_socket.send(msg_len.encode())  # send event_type length
+                    client_socket.send(event_type.encode())  # send event type
+                    src_relpath = event[1]
+                    msg_len = str(len(src_relpath)).zfill(12)
+                    client_socket.send(msg_len.encode())
+                    client_socket.send(src_relpath.encode())
+                    dst_relpath = event[2]
+                    msg_len = str(len(dst_relpath)).zfill(12)
+                    client_socket.send(msg_len.encode())
+                    client_socket.send(dst_relpath.encode())
                     updates_map[identifier][computerIdentifier].remove(event)
 
             client_socket.send('finish_all!!'.encode())
