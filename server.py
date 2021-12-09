@@ -1,12 +1,10 @@
 import socket
 import sys
 import os
-import watchdog
-import time
 import string
 import random
 
-LIMITED_SIZE = 30000
+LIMITED_SIZE = 8000  # Limited size for sends messages in segments
 
 def main():
 
@@ -24,7 +22,6 @@ def main():
     while True:
         # Connect to the client
         client_socket, client_address = server.accept()
-        print('Connection from: ', client_address)
 
         # set identifier and computeridentifier for this client device
         newClient = 0
@@ -38,7 +35,6 @@ def main():
             client_socket.send(computerIdentifier.encode())
             identifier = client_socket.recv(128).decode()
             if identifier == '0':
-                print('working')
                 newClient = 1
             if newClient == 1:
                 identifier = ''
@@ -49,7 +45,6 @@ def main():
             client_socket.send(identifier.encode())
             # add the device of the client to the right place in the updates map
             updates_map[identifier].update({computerIdentifier: []})
-            print("updates map: ", updates_map)
             print(identifier)
 
             # if new client - get dir
@@ -81,12 +76,6 @@ def main():
                                 if not data: break
                                 f.write(data)
                                 length -= len(data)
-                            else:  # only runs if while doesn't break and length==0
-                                print('Complete')
-                                continue
-                                # socket was closed early.
-                        print('Incomplete')
-                        break
             # if old client with new device - transfer dir
             else:
                 directory = identifier
@@ -118,13 +107,12 @@ def main():
                                 if not data: break
                                 client_socket.sendall(data)
                     client_socket.send("finish_files".encode())
-                print('Done.')
                 client_socket.send("finish_all!!".encode())
-            # print(updates_map)
             client_socket.close()
 
+        # if its client in second or more connection receive and send updates
+        # first - receive
         else:
-            print('old known client connected!!!')
             events_list_length = client_socket.recv(12).decode()  # recive length of events list
             if events_list_length == '000000000000':
                 events_list_length = '0'
@@ -164,29 +152,6 @@ def main():
                             updates_map[identifier][device].append([is_directory, event_type, relpath])
                     if is_directory == '1':
                         os.makedirs(dst_path)
-                        """while True:
-                            msg_len = client_socket.recv(12).decode()
-                            if msg_len == 'finish_all!!':
-                                break
-                            while msg_len != 'finish_dires':
-                                dirrelpath = client_socket.recv(int(msg_len)).decode()
-                                dirname = os.path.join(dst_path, dirrelpath)
-                                os.makedirs(dirname)
-                                msg_len = client_socket.recv(12).decode()
-                            while True:
-                                msg_len = client_socket.recv(12).decode()  # recive relpath length
-                                if msg_len == 'finish_files':
-                                    break
-                                relpath = client_socket.recv(int(msg_len)).decode()  # recive relpath
-                                new_path = os.path.join(dst_path, relpath)
-                                length = int(client_socket.recv(12).decode())  # recive file length
-                                with open(new_path, 'wb') as f:
-                                    while length:
-                                        msg_len = min(length, LIMITED_SIZE)
-                                        data = client_socket.recv(msg_len)
-                                        if not data: break
-                                        f.write(data)
-                                        length -= len(data)"""
                     else:
                         length = int(client_socket.recv(12).decode())  # receive file length
                         # Read the data in chunks so it can handle large files.
@@ -197,12 +162,6 @@ def main():
                                 if not data: break
                                 f.write(data)
                                 length -= len(data)
-                            """else:  # only runs if while doesn't break and length==0
-                                print('Complete')
-                                continue
-                                # socket was closed early.
-                        print('Incomplete')
-                        break"""
 
                 elif event_type == 'moved':
                     msg_len = client_socket.recv(12).decode()  # receive relpath length
@@ -217,6 +176,7 @@ def main():
                             # notice: in 'moved' event the order of the parameters is different!
                             updates_map[identifier][device].append([event_type, src_relpath, dst_relpath])
 
+            # from now on - send updates from the updates map
             for event in updates_map[identifier][computerIdentifier]:
                 if event[1] == 'deleted':
                     event_type = 'deleted'
@@ -245,34 +205,6 @@ def main():
                     if event[0] == '1':
                         is_directory = '1'
                     client_socket.send(is_directory.encode())  # send is_directory
-                    """if is_directory == '1':
-                        dirname = os.path.join(directory_path, relpath)
-                        for path, dirs, files in os.walk(dirname, topdown=True):
-                            # send all dirs
-                            for dir in dirs:
-                                direname = os.path.join(path, dir)
-                                relpath = os.path.relpath(direname, dirname)
-                                msg_len = str(len(relpath)).zfill(12)
-                                client_socket.send(msg_len.encode())
-                                client_socket.send(relpath.encode())
-                            client_socket.send("finish_dires".encode())
-                            # send all files
-                            for file in files:
-                                filename = os.path.join(path, file)
-                                relpath = os.path.relpath(filename, dirname)
-                                msg_len = str(len(relpath)).zfill(12)
-                                client_socket.send(msg_len.encode())
-                                client_socket.send(relpath.encode())
-                                filesize = os.path.getsize(filename)
-                                msg_len = str(filesize).zfill(12)
-                                client_socket.send(msg_len.encode())
-                                with open(filename, 'rb') as f:
-                                    while True:
-                                        data = f.read(LIMITED_SIZE)
-                                        if not data: break
-                                        client_socket.sendall(data)
-                            client_socket.send("finish_files".encode())
-                        client_socket.send("finish_all!!".encode())"""
                     if is_directory == '0':
                         src_path = os.path.join(directory_path, relpath)
                         filesize = os.path.getsize(src_path)
